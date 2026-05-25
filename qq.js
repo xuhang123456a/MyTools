@@ -527,10 +527,10 @@ async function getMediaSource(musicItem, quality) {
     };
 }
 module.exports = {
-    platform: "小秋音乐",
-    author: "Huibq",
-    version: "0.3.0",
-    srcUrl: "https://fastly.jsdelivr.net/gh/Huibq/keep-alive/Music_Free/xiaoqiu.js",
+    platform: "QQ音乐",
+    author: "xuhang",
+    version: "0.4.0",
+    srcUrl: "https://raw.githubusercontent.com/xuhang123456a/MyTools/refs/heads/main/qq.js?t=20260525",
     cacheControl: "no-cache",
     hints: {
         importMusicSheet: [
