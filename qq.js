@@ -9,6 +9,7 @@ function formatMusicItem(_) {
     const albumid = _.albumid || ((_a = _.album) === null || _a === void 0 ? void 0 : _a.id);
     const albummid = _.albummid || ((_b = _.album) === null || _b === void 0 ? void 0 : _b.mid);
     const albumname = _.albumname || ((_c = _.album) === null || _c === void 0 ? void 0 : _c.title);
+    const file = _.file || {};
     return {
         id: _.id || _.songid,
         songmid: _.mid || _.songmid,
@@ -21,6 +22,13 @@ function formatMusicItem(_) {
         lrc: _.lyric || undefined,
         albumid: albumid,
         albummid: albummid,
+        strMediaMid: _.strMediaMid || _.media_mid || file.media_mid,
+        availableFormats: {
+            m4a: Boolean(file.size_24aac || file.size_48aac || file.size_96aac || file.size_192aac),
+            128: Boolean(file.size_128mp3),
+            320: Boolean(file.size_320mp3),
+            flac: Boolean(file.size_flac),
+        },
     };
 }
 function formatAlbumItem(_) {
@@ -187,6 +195,114 @@ const typeMap = {
         e: ".flac",
     },
 };
+const mediaSourceHeaders = {
+    Referer: "https://y.qq.com/",
+    "User-Agent": headers["user-agent"],
+};
+const qualityFallbackMap = {
+    low: ["128", "m4a"],
+    standard: ["320", "128", "m4a"],
+    high: ["320", "128", "m4a"],
+    super: ["flac", "320", "128", "m4a"],
+};
+function unique(items) {
+    return [...new Set(items)];
+}
+function getFormatCandidates(musicItem, quality) {
+    const baseCandidates = qualityFallbackMap[quality] || qualityFallbackMap.standard;
+    const availableFormats = musicItem.availableFormats;
+    if (!availableFormats) {
+        return unique(baseCandidates);
+    }
+    const preferred = baseCandidates.filter((formatKey) => availableFormats[formatKey]);
+    return preferred.length ? unique([...preferred, ...baseCandidates]) : unique(baseCandidates);
+}
+function buildQQFileName(strMediaMid, formatKey) {
+    const fileInfo = typeMap[formatKey];
+    return fileInfo && strMediaMid ? `${fileInfo.s}${strMediaMid}${fileInfo.e}` : "";
+}
+async function getNativeMediaUrl(musicItem, quality) {
+    if (!musicItem.songmid || !musicItem.strMediaMid) {
+        return;
+    }
+    const guid = "10000";
+    const uin = "0";
+    for (const formatKey of getFormatCandidates(musicItem, quality)) {
+        const filename = buildQQFileName(musicItem.strMediaMid, formatKey);
+        if (!filename) {
+            continue;
+        }
+        const reqData = {
+            req_0: {
+                module: "vkey.GetVkeyServer",
+                method: "CgiGetVkey",
+                param: {
+                    filename: [filename],
+                    guid,
+                    songmid: [musicItem.songmid],
+                    songtype: [0],
+                    uin,
+                    loginflag: 1,
+                    platform: "20",
+                },
+            },
+            loginUin: uin,
+            comm: {
+                uin,
+                format: "json",
+                ct: 24,
+                cv: 0,
+            },
+        };
+        try {
+            const res = (await axios_1.default.get("https://u.y.qq.com/cgi-bin/musicu.fcg", {
+                params: {
+                    format: "json",
+                    data: JSON.stringify(reqData),
+                },
+                headers: {
+                    channel: "0146951",
+                    uid: "1234",
+                },
+            })).data;
+            const data = res.req_0 && res.req_0.data;
+            const purl = data && data.midurlinfo && data.midurlinfo[0] && data.midurlinfo[0].purl;
+            const sip = data && Array.isArray(data.sip) ? data.sip[0] : "";
+            if (purl && sip) {
+                return preferHttps(`${sip}${purl}`);
+            }
+        }
+        catch (err) {
+        }
+    }
+}
+async function getThirdPartyMediaUrl(musicItem, quality) {
+    const candidates = unique(getFormatCandidates(musicItem, quality)
+        .map((formatKey) => {
+        if (formatKey === "flac") {
+            return "320k";
+        }
+        if (formatKey === "320") {
+            return "320k";
+        }
+        return "128k";
+    }));
+    for (const targetQuality of candidates) {
+        try {
+            const res = (await axios_1.default.get(`https://lxmusicapi.onrender.com/url/tx/${musicItem.songmid}/${targetQuality}`, {
+                headers: {
+                    "X-Request-Key": "share-v3",
+                },
+            })).data;
+            const url = preferHttps(res === null || res === void 0 ? void 0 : res.url);
+            if ((res === null || res === void 0 ? void 0 : res.code) === 0 && url) {
+                return url;
+            }
+        }
+        catch (err) {
+        }
+    }
+}
 async function getAlbumInfo(albumItem) {
     const url = changeUrlQuery({
         data: JSON.stringify({
@@ -515,22 +631,27 @@ const qualityLevels = {
     super: "320k",
 };
 async function getMediaSource(musicItem, quality) {
-    const res = (
-        await axios_1.default.get(`https://lxmusicapi.onrender.com/url/tx/${musicItem.songmid}/${qualityLevels[quality]}`, {
-            headers: {
-                "X-Request-Key": "share-v3"
-            },
-        })
-    ).data;
-    return {
-        url: preferHttps(res.url),
-    };
+    const nativeUrl = await getNativeMediaUrl(musicItem, quality);
+    if (nativeUrl) {
+        return {
+            url: nativeUrl,
+            headers: mediaSourceHeaders,
+        };
+    }
+    const fallbackUrl = await getThirdPartyMediaUrl(musicItem, quality);
+    if (fallbackUrl) {
+        return {
+            url: fallbackUrl,
+            headers: mediaSourceHeaders,
+        };
+    }
+    throw new Error(`failed to get media source for ${musicItem.songmid || musicItem.id}`);
 }
 module.exports = {
     platform: "QQ音乐",
     author: "xuhang",
-    version: "0.4.0",
-    srcUrl: "https://raw.githubusercontent.com/xuhang123456a/MyTools/refs/heads/main/qq.js",
+    version: "0.5.0",
+    srcUrl: "https://raw.githubusercontent.com/xuhang123456a/MyTools/main/qq.js",
     cacheControl: "no-cache",
     hints: {
         importMusicSheet: [
