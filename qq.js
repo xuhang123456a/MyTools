@@ -530,7 +530,7 @@ module.exports = {
     platform: "QQ音乐",
     author: "xuhang",
     version: "0.4.0",
-    srcUrl: "https://raw.githubusercontent.com/xuhang123456a/MyTools/refs/heads/main/qq.js?t=20260525",
+    srcUrl: "https://raw.githubusercontent.com/xuhang123456a/MyTools/refs/heads/main/qq.js",
     cacheControl: "no-cache",
     hints: {
         importMusicSheet: [
