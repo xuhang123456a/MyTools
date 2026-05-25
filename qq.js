@@ -162,6 +162,9 @@ function changeUrlQuery(obj, baseUrl) {
     });
     return `${url}?${queryArr.join("&")}`.replace(/\?$/, "");
 }
+function preferHttps(url) {
+    return typeof url === "string" ? url.replace(/^http:\/\//i, "https://") : url;
+}
 const typeMap = {
     m4a: {
         s: "C400",
@@ -236,7 +239,7 @@ async function getArtistSongs(artistItem, page) {
                 module: "music.web_singer_info_svr",
             },
         }),
-    }, "http://u.y.qq.com/cgi-bin/musicu.fcg");
+    }, "https://u.y.qq.com/cgi-bin/musicu.fcg");
     const res = (await (0, axios_1.default)({
         url: url,
         method: "get",
@@ -268,7 +271,7 @@ async function getArtistAlbums(artistItem, page) {
                 module: "music.web_singer_info_svr",
             },
         }),
-    }, "http://u.y.qq.com/cgi-bin/musicu.fcg");
+    }, "https://u.y.qq.com/cgi-bin/musicu.fcg");
     const res = (await (0, axios_1.default)({
         url,
         method: "get",
@@ -291,7 +294,7 @@ async function getArtistWorks(artistItem, page, type) {
 }
 async function getLyric(musicItem) {
     const result = (await (0, axios_1.default)({
-        url: `http://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid=${musicItem.songmid}&pcachetime=${new Date().getTime()}&g_tk=5381&loginUin=0&hostUin=0&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq&needNewCode=0`,
+        url: `https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid=${musicItem.songmid}&pcachetime=${new Date().getTime()}&g_tk=5381&loginUin=0&hostUin=0&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq&needNewCode=0`,
         headers: { Referer: "https://y.qq.com", Cookie: "uin=" },
         method: "get",
         xsrfCookieName: "XSRF-TOKEN",
@@ -373,7 +376,7 @@ async function requestMusicSheetById(id) {
     const urls = [
         `https://c.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg?${baseParams}`,
         `https://i.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg?${baseParams}`,
-        `http://i.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg?${baseParams}`,
+        `https://i.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg?${baseParams}`,
     ];
     for (const url of urls) {
         try {
@@ -520,7 +523,7 @@ async function getMediaSource(musicItem, quality) {
         })
     ).data;
     return {
-        url: res.url,
+        url: preferHttps(res.url),
     };
 }
 module.exports = {
