@@ -238,7 +238,9 @@ while ($true) {
             elseif (-not (Test-Path $target)) { Write-Host ("路径已不存在: {0}" -f $target) -ForegroundColor Red }
             else {
                 Write-Host ("正在用 VSCode 打开: {0}" -f $target) -ForegroundColor Green
-                Start-Process -FilePath $code -ArgumentList ('"' + $target + '"')
+                # 用 cmd 的 start 拉起，让 VSCode 脱离本窗口的进程树/Job；
+                # 否则点窗口的 X 关闭本工具时，Windows 会把同一 Job 里的 VSCode 一起杀掉。
+                Start-Process -FilePath $env:ComSpec -ArgumentList ('/c start "" "{0}" "{1}"' -f $code, $target) -WindowStyle Hidden
             }
         } else { Write-Host ("编号超出范围(1-{0})。" -f $items.Count) -ForegroundColor Red }
     }

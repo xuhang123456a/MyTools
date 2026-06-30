@@ -224,7 +224,9 @@ while ($true) {
             elseif (-not (Test-Path $target)) { Write-Host ("路径已不存在: {0}" -f $target) -ForegroundColor Red }
             else {
                 Write-Host ("正在用 Kiro 打开: {0}" -f $target) -ForegroundColor Green
-                Start-Process -FilePath $kiro -ArgumentList ('"' + $target + '"')
+                # 用 cmd 的 start 拉起，让 Kiro 脱离本窗口的进程树/Job；
+                # 否则点窗口的 X 关闭本工具时，Windows 会把同一 Job 里的 Kiro 一起杀掉。
+                Start-Process -FilePath $env:ComSpec -ArgumentList ('/c start "" "{0}" "{1}"' -f $kiro, $target) -WindowStyle Hidden
             }
         } else { Write-Host ("编号超出范围(1-{0})。" -f $items.Count) -ForegroundColor Red }
     }
