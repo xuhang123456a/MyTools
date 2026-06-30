@@ -169,6 +169,31 @@ function Show-List($items) {
     Write-Host ("共 {0} 个工作区。" -f $items.Count) -ForegroundColor Cyan
 }
 
+# 彻底删除某工作区在 VSCode 里的本地数据(整个 workspaceStorage\<hash> 目录)
+function Remove-Workspace($item) {
+    $dir = Join-Path $wsDir $item.Hash
+    if (-not (Test-Path $dir)) { Write-Host '该工作区存储目录已不存在。' -ForegroundColor Red; return $false }
+    Write-Host ''
+    Write-Host '!! 危险操作 !! 即将彻底删除该工作区在 VSCode 里的全部本地数据:' -ForegroundColor Red
+    Write-Host ("   工作区: {0}" -f $item.Path) -ForegroundColor Yellow
+    Write-Host ("   存储目录: {0}" -f $dir) -ForegroundColor Yellow
+    Write-Host ("   含 {0} 个聊天会话、编辑状态(state.vscdb)等，删除后不可恢复。" -f $item.Sessions.Count) -ForegroundColor Yellow
+    Write-Host '   说明: 你的实际项目文件不受影响。' -ForegroundColor DarkGray
+    Write-Host '         "打开最近"列表里的该条目可能仍残留(VSCode 存于全局数据库，本工具不改它以免损坏)，' -ForegroundColor DarkGray
+    Write-Host '         如需清除可在 VSCode 的"打开最近"里右键移除。' -ForegroundColor DarkGray
+    $c = Read-Host '确认删除请输入大写 YES (其它任意键取消)'
+    if ($c -cne 'YES') { Write-Host '已取消，未删除任何内容。' -ForegroundColor Green; return $false }
+    try {
+        Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction Stop
+        Write-Host '已删除该工作区的全部本地数据。' -ForegroundColor Green
+        return $true
+    } catch {
+        Write-Host ("删除失败: {0}" -f $_.Exception.Message) -ForegroundColor Red
+        Write-Host '可能是 VSCode 正在运行占用了文件，请先完全关闭 VSCode 再重试。' -ForegroundColor Red
+        return $false
+    }
+}
+
 # ===== 主流程 =====
 Show-Info
 Write-Host ''
@@ -181,6 +206,7 @@ while ($true) {
     Write-Host '-----------------------------------------------------------' -ForegroundColor DarkCyan
     Write-Host '请选择操作:' -ForegroundColor Yellow
     Write-Host '  输入数字  -> 用 VSCode 打开对应编号的工作区'
+    Write-Host '  D 数字    -> 彻底删除对应编号工作区的本地数据(需输入 YES 确认)'
     Write-Host '  O         -> 打开 VSCode 用户数据文件夹'
     Write-Host '  L         -> 重新显示列表'
     Write-Host '  Q         -> 退出'
@@ -193,6 +219,16 @@ while ($true) {
         else { Write-Host "目录不存在: $base" -ForegroundColor Red }
     }
     elseif ($sel -match '^[Ll]$') { Show-List $items }
+    elseif ($sel -match '^[Dd]\s*\d*$') {
+        $num = ($sel -replace '\D', '')
+        if ($num -eq '') { $num = (Read-Host '请输入要删除的工作区编号').Trim() }
+        if ($num -match '^\d+$') {
+            $n = [int]$num
+            if ($n -ge 1 -and $n -le $items.Count) {
+                if (Remove-Workspace $items[$n - 1]) { $items = Get-Items; Show-List $items }
+            } else { Write-Host ("编号超出范围(1-{0})。" -f $items.Count) -ForegroundColor Red }
+        } else { Write-Host '无效编号。' -ForegroundColor Red }
+    }
     elseif ($sel -match '^\d+$') {
         $n = [int]$sel
         if ($n -ge 1 -and $n -le $items.Count) {

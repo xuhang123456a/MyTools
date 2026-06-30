@@ -128,6 +128,60 @@ function Show-List($items) {
     Write-Host ("共 {0} 个工作区。" -f $items.Count) -ForegroundColor Cyan
 }
 
+# 彻底删除某工作区的 Kiro 历史(工作区目录 + 全局 sessions 索引/副本 + .diffs)
+function Remove-Workspace($item) {
+    $dir = Join-Path $wsDir $item.EncName
+    if (-not (Test-Path $dir)) { Write-Host '该工作区目录已不存在。' -ForegroundColor Red; return $false }
+    Write-Host ''
+    Write-Host '!! 危险操作 !! 即将彻底删除该工作区的 Kiro 历史(对话/索引/差异)，不可恢复:' -ForegroundColor Red
+    Write-Host ("   工作区: {0}" -f $item.Path) -ForegroundColor Yellow
+    Write-Host ("   目录: {0}" -f $dir) -ForegroundColor Yellow
+    Write-Host ("   含 {0} 段会话；同时清理全局 sessions 索引与副本、.diffs 差异记录。" -f $item.Sessions.Count) -ForegroundColor Yellow
+    Write-Host '   说明: 你的实际项目文件不受影响。' -ForegroundColor DarkGray
+    $c = Read-Host '确认删除请输入大写 YES (其它任意键取消)'
+    if ($c -cne 'YES') { Write-Host '已取消，未删除任何内容。' -ForegroundColor Green; return $false }
+
+    # 先收集该工作区的 sessionId，用于清理全局数据
+    $ids = @()
+    $sf = Join-Path $dir 'sessions.json'
+    if (Test-Path $sf) {
+        try {
+            $arr = Get-Content $sf -Raw -Encoding UTF8 | ConvertFrom-Json
+            foreach ($s in @($arr)) { if ($s -and $s.sessionId) { $ids += $s.sessionId } }
+        } catch {}
+    }
+
+    try { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction Stop }
+    catch {
+        Write-Host ("删除工作区目录失败: {0}" -f $_.Exception.Message) -ForegroundColor Red
+        Write-Host '可能是 Kiro 正在运行占用了文件，请先完全关闭 Kiro 再重试。' -ForegroundColor Red
+        return $false
+    }
+
+    # 清理全局 sessions\sessions.json 中属于该工作区的条目
+    $gdir = Join-Path $base 'sessions'
+    $gIndex = Join-Path $gdir 'sessions.json'
+    if (Test-Path $gIndex) {
+        try {
+            $g = Get-Content $gIndex -Raw -Encoding UTF8 | ConvertFrom-Json
+            $keep = @($g) | Where-Object { ($ids -notcontains $_.sessionId) -and ($_.workspaceDirectory -ne $item.Path) }
+            $parts = @($keep | ForEach-Object { $_ | ConvertTo-Json -Depth 20 -Compress })
+            $out = '[' + ($parts -join ',') + ']'
+            Set-Content -LiteralPath $gIndex -Value $out -Encoding UTF8
+        } catch {}
+    }
+    # 删除全局会话副本与差异记录
+    $ddir = Join-Path $base '.diffs'
+    foreach ($id in $ids) {
+        $gf = Join-Path $gdir ($id + '.json')
+        if (Test-Path $gf) { Remove-Item -LiteralPath $gf -Force -ErrorAction SilentlyContinue }
+        $df = Join-Path $ddir $id
+        if (Test-Path $df) { Remove-Item -LiteralPath $df -Recurse -Force -ErrorAction SilentlyContinue }
+    }
+    Write-Host ("已删除该工作区的全部 Kiro 历史(含 {0} 段会话的全局副本)。" -f $ids.Count) -ForegroundColor Green
+    return $true
+}
+
 # ===== 主流程 =====
 Show-Info
 $items = Get-Items
@@ -138,6 +192,7 @@ while ($true) {
     Write-Host '------------------------------------------------------------' -ForegroundColor DarkCyan
     Write-Host '请选择操作:' -ForegroundColor Yellow
     Write-Host '  输入数字  -> 用 Kiro 打开对应编号的工作区'
+    Write-Host '  D 数字    -> 彻底删除对应编号工作区的 Kiro 历史(需输入 YES 确认)'
     Write-Host '  O         -> 打开 Kiro 历史记录文件夹'
     Write-Host '  L         -> 重新显示列表'
     Write-Host '  Q         -> 退出'
@@ -150,6 +205,16 @@ while ($true) {
         else { Write-Host "目录不存在: $base" -ForegroundColor Red }
     }
     elseif ($sel -match '^[Ll]$') { Show-List $items }
+    elseif ($sel -match '^[Dd]\s*\d*$') {
+        $num = ($sel -replace '\D', '')
+        if ($num -eq '') { $num = (Read-Host '请输入要删除的工作区编号').Trim() }
+        if ($num -match '^\d+$') {
+            $n = [int]$num
+            if ($n -ge 1 -and $n -le $items.Count) {
+                if (Remove-Workspace $items[$n - 1]) { $items = Get-Items; Show-List $items }
+            } else { Write-Host ("编号超出范围(1-{0})。" -f $items.Count) -ForegroundColor Red }
+        } else { Write-Host '无效编号。' -ForegroundColor Red }
+    }
     elseif ($sel -match '^\d+$') {
         $n = [int]$sel
         if ($n -ge 1 -and $n -le $items.Count) {
