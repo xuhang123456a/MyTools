@@ -9,6 +9,7 @@
 - 强制置顶采用线程输入附加技巧，绕过 Windows 前台锁。
 - rect 可留空（None），则自动在网格里补一个位置。
 """
+import re
 import time
 import ctypes
 import subprocess
@@ -16,6 +17,9 @@ from ctypes import wintypes
 from pathlib import Path
 
 import win32com.client
+
+# 匹配“纯盘符根”写法：D: / D:\ / D:\\ / D:/ / D:// 等
+_DRIVE_ROOT_RE = re.compile(r"^([A-Za-z]):[\\/]*$")
 
 # ---------------------------------------------------------
 # 常量与 Win32 句柄
@@ -61,12 +65,24 @@ def auto_grid_rect(index, total, columns=2, gap=8):
     return (x, y, cell_w, cell_h)
 
 
-def normalize_path(raw):
-    """统一路径格式，便于匹配（处理大小写、尾部斜杠、盘符根）。"""
+def to_open_path(raw):
+    """
+    规范化成真正能被 explorer / Navigate 打开的路径。
+    修正各种畸形写法：D:\\\\ (双反斜杠)、D:、D:/ 统统纠正成 D:\\。
+    注意：盘符根必须保留结尾反斜杠，否则会被理解成“D 盘当前目录”。
+    """
+    m = _DRIVE_ROOT_RE.match(str(raw).strip())
+    if m:  # 纯盘符 -> 盘符根，如 "D:\"
+        return m.group(1).upper() + ":\\"
     try:
-        return str(Path(raw).resolve()).rstrip("\\/").lower()
+        return str(Path(raw).resolve())
     except Exception:
-        return str(raw).rstrip("\\/").lower()
+        return str(raw)
+
+
+def normalize_path(raw):
+    """统一路径格式，仅用于【匹配比较】（小写、去尾部斜杠）。"""
+    return to_open_path(raw).rstrip("\\/").lower()
 
 
 def force_foreground(hwnd):
@@ -125,7 +141,8 @@ def organize_smart_layout(layout_config):
         tasks.append({
             "path": cfg["path"],
             "rect": rect,
-            "target_path": normalize_path(cfg["path"]),
+            "open_path": to_open_path(cfg["path"]),      # 用于 explorer / Navigate
+            "target_path": normalize_path(cfg["path"]),  # 用于匹配比较
             "hwnd": None,
         })
 
@@ -146,7 +163,7 @@ def organize_smart_layout(layout_config):
             if not item["claimed"]:
                 print(f"[~] 废物利用: 重定向闲置窗口 -> [{Path(task['path']).name}]")
                 try:
-                    item["win_obj"].Navigate(task["path"])
+                    item["win_obj"].Navigate(task["open_path"])
                 except Exception:
                     continue
                 task["hwnd"] = item["hwnd"]
@@ -159,7 +176,7 @@ def organize_smart_layout(layout_config):
         if task["hwnd"] is not None:
             continue
         print(f"[+] 池子已空: 新建窗口 -> [{Path(task['path']).name}]")
-        subprocess.Popen(["explorer", task["path"]])
+        subprocess.Popen(["explorer", task["open_path"]])
 
         for _ in range(20):  # 最多等 2 秒轮询新窗口
             time.sleep(0.1)
@@ -204,12 +221,16 @@ if __name__ == "__main__":
             "rect": (750, 150, 1088, 600),      # 右上
         },
         {
-            "path": r"E:\rocket-nano",
-            "rect": (100, 250, 1088, 600),      # 左下
+            "path": r"E:\aurora\aurora-nano\scripts\export",
+            "rect": (100, 440, 1088, 600),      # 左下
         },
         {
-            "path": r"D:\360极速浏览器X下载",
-            "rect": (750, 250, 1088, 600),    # 右下
+            "path": r"E:\aurora\aurora-nano\external\excel",
+            "rect": (750, 440, 1088, 600),    # 右下
+        },
+        {
+            "path": r"D:\\",
+            "rect": (400, 300, 1088, 600),
         },
     ]
 
