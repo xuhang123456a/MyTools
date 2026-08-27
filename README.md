@@ -26,6 +26,13 @@ MyTools/
 │   ├── xuhang-本地极速版.json   # jsDelivr CDN 加速订阅源
 │   └── 原作者.json             # 上游参考源
 │
+├── 🤖 AI全局规范与配置中枢/
+│   ├── README.md               # AI 自适应接入指南 (面向未来新 AI 工具的自举协议)
+│   ├── AGENTS.md               # 全局统一用户规则总线 (三大核心红线准则)
+│   ├── rules/                  # 模块化领域全局准则 (Unity热更安全/Fail-Fast/架构审查)
+│   ├── skills/                 # 全局通用工程技能库 (如 unity-engineering 极速编译验证)
+│   └── mcp/                    # 全局统一 MCP 工具配置 (如 Chrome DevTools 等)
+│
 ├── .gitignore                  # Git 忽略规则配置
 └── README.md                   # 本说明文档
 ```
