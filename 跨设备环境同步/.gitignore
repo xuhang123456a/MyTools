@@ -1,0 +1,8 @@
+# 忽略本地包含真实私密 Key 的配置文件
+*.local.ps1
+.env
+*.secret
+
+# 忽略临时文件
+*.tmp
+*.log
