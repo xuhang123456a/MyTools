@@ -9,8 +9,9 @@ Use the narrowest verification that proves the changed layer.
 
 ## 1. 核心架构与准则 (Core Engineering Principles)
 
-- **Fail-Fast 原则**：严禁在 Mono/Prefab 核心依赖上使用层层嵌套的 `if (obj != null)` 静默兜底；关键依赖缺失必须直接抛出异常立即暴露问题。
-- **架构先导 (Architecture-First)**：单一职责 (SRP)、表现层与数据层解耦、生命周期严格管控防 GC 逃逸、知其所以然 (讲透 Design Rationale)。
+- **Fail-Fast 原则**：严禁在 Mono/Prefab 核心依赖上添加无意义的判空或手工抛异常；直接使用核心依赖，让 Unity 自然产生的 `NullReferenceException` / `MissingReferenceException` 暴露真实调用栈。
+- **架构先导 (Architecture-First)**：单一职责 (SRP)、表现层与数据层解耦、视图黑盒自治（对外提供自闭环生命周期契约，禁止外部侵入操作内部节点与动效）、知其所以然 (讲透 Design Rationale)。
+- **交互生命周期与事件链完整性**：表现接管与实例销毁严格分相，严禁在活跃事件派发中执行破坏性销毁；异步退出上下文感知分流，配合物理输入自愈异常状态机。
 - **完整工程规范手册**：深入细节请直接查阅 `references/unity-standards.md`。
 
 ## 2. 编译校验工作流 (Compile Validation)
@@ -19,7 +20,7 @@ Use the narrowest verification that proves the changed layer.
 2. Treat Unity-generated `.csproj` files as IDE metadata unless the repository explicitly supports `dotnet build`. Do not edit them.
 3. If system `dotnet build` hits established third-party/framework errors, do not retry it. Separate that baseline from current-change errors.
 4. For self-contained source roots, run `scripts/validate-unity-sources.ps1` with the owning generated project. It uses Unity's bundled host/compiler and a response file, avoiding system-SDK semantics and Windows command-length limits.
-5. Use Unity Editor compilation for lifecycle code, asmdef boundaries, Editor code, `GameSimulator`-style cross-layer code, prefabs, scenes, or serialized bindings. Report the exact validated scope; never call a partial check a full project build.
+5. Lifecycle code, asmdef boundaries, Editor code, prefabs, scenes, and serialized bindings ultimately require Unity Editor validation, but **Assets Refresh and Editor compilation are performed by the user**. Do not control Windows or Unity, trigger Assets Refresh, clear/read the Console, or spend tokens automating the Editor. Complete the narrow source validation available to Codex, report its exact scope, and leave Editor validation explicitly pending for the user.
 
 ### 命令行调用示例：
 
